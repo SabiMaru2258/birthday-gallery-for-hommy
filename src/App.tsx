@@ -648,8 +648,26 @@ export default function App() {
       }
     };
 
+    const handleTouchStart = () => {
+      // Allow touch to start the animation or blow out candle on touch devices
+      if (!hasStarted) {
+        playBackgroundMusic();
+        setHasStarted(true);
+        return;
+      }
+      if (hasAnimationCompleted && isCandleLit) {
+        setIsCandleLit(false);
+        setFireworksActive(true);
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    // Add touch support for starting/blowing out candle
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("touchstart", handleTouchStart);
+    };
   }, [hasStarted, hasAnimationCompleted, isCandleLit, playBackgroundMusic]);
 
   const handleCardToggle = useCallback((id: string) => {
@@ -783,7 +801,18 @@ export default function App() {
     <div className="App">
       <div
         className="background-overlay"
-        style={{ opacity: backgroundOpacity }}
+        style={{ 
+          opacity: backgroundOpacity,
+          cursor: hasStarted ? 'default' : 'pointer',
+          pointerEvents: hasStarted ? 'none' : 'auto'
+        }}
+        onClick={() => {
+          // Allow clicking/tapping the overlay to start on touch devices
+          if (!hasStarted) {
+            playBackgroundMusic();
+            setHasStarted(true);
+          }
+        }}
       >
         <div className="typed-text">
           {typedLines.map((line, index) => {
@@ -804,6 +833,9 @@ export default function App() {
           })}
         </div>
       </div>
+      {!hasStarted && (
+        <div className="hint-overlay">tap anywhere to start</div>
+      )}
       {hasAnimationCompleted && isCandleLit && (
         <div className="hint-overlay">tap to blow out the candle</div>
       )}
