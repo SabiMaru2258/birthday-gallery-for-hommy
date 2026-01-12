@@ -20,6 +20,9 @@ import { BirthdayCard } from "./components/BirthdayCard";
 
 import "./App.css";
 
+// Set to true to skip the intro typing animation and start the scene immediately
+const SKIP_INTRO = false;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -77,17 +80,29 @@ const BACKGROUND_FADE_START = Math.max(
 );
 
 const TYPED_LINES = [
-  "> tina",
+  "> Hello Hom Hom !",
   "...",
-  "> today is your birthday",
+  "> today is your birthday !",
   "...",
-  "> so i made you this computer program",
+  "> so i made you this little gallery program",
   "...",
   "٩(◕‿◕)۶ ٩(◕‿◕)۶ ٩(◕‿◕)۶"
 ];
 const TYPED_CHAR_DELAY = 100;
 const POST_TYPING_SCENE_DELAY = 1000;
 const CURSOR_BLINK_INTERVAL = 480;
+
+const TERMINAL_LINES = [
+  "> INITIALIZING CAMERA MODULE...",
+  "> SCANNING FOR DEVICES...",
+  "> ERROR: NO CAMERA DETECTED.",
+  "...",
+  "> I GUESS YOU'LL NEED A NEW CAMERA NOW.",
+  "> :)"
+];
+const TERMINAL_CHAR_DELAY = 50; // 30-60ms per character (using 50ms)
+const TERMINAL_LINE_DELAYS = [800, 1000, 1200, 1000, 800, 600]; // Pause between lines (400-1200ms)
+const TERMINAL_CURSOR_BLINK_INTERVAL = 480;
 
 type BirthdayCardConfig = {
   id: string;
@@ -99,7 +114,7 @@ type BirthdayCardConfig = {
 const BIRTHDAY_CARDS: ReadonlyArray<BirthdayCardConfig> = [
   {
     id: "confetti",
-    image: "/card.png",
+    image: "/my-card.png",
     position: [1, 0.081, -2],
     rotation: [-Math.PI / 2 , 0, Math.PI / 3],
   }
@@ -378,17 +393,85 @@ export default function App() {
   const [isCandleLit, setIsCandleLit] = useState(true);
   const [fireworksActive, setFireworksActive] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [terminalLineIndex, setTerminalLineIndex] = useState(0);
+  const [terminalCharIndex, setTerminalCharIndex] = useState(0);
+  const [terminalCursorVisible, setTerminalCursorVisible] = useState(true);
+  const [terminalTypingComplete, setTerminalTypingComplete] = useState(false);
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const audio = new Audio("/music.mp3");
     audio.loop = true;
     audio.preload = "auto";
+    audio.volume = 1.0;
     backgroundAudioRef.current = audio;
     return () => {
       audio.pause();
       backgroundAudioRef.current = null;
     };
+  }, []);
+
+
+  const playTypingSound = useCallback(() => {
+    // Generate a realistic typing sound using Web Audio API
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const now = audioContext.currentTime;
+      
+      // Create a more realistic typing sound with multiple frequencies
+      // Simulates the mechanical click of a keyboard
+      const frequencies = [
+        200 + Math.random() * 50,  // Low click
+        400 + Math.random() * 100,  // Mid click
+        600 + Math.random() * 150   // High click
+      ];
+      
+      frequencies.forEach((freq, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = freq;
+        oscillator.type = 'sine';
+        
+        // Create a quick attack and decay for realistic typing sound
+        const delay = index * 0.002; // Slight stagger for realism
+        const duration = 0.015 + Math.random() * 0.01;
+        const volume = 0.12 - (index * 0.03); // Decrease volume for higher frequencies
+        
+        gainNode.gain.setValueAtTime(0, now + delay);
+        gainNode.gain.linearRampToValueAtTime(volume, now + delay + 0.001);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + delay + duration);
+        
+        oscillator.start(now + delay);
+        oscillator.stop(now + delay + duration);
+      });
+    } catch (error) {
+      // Fallback: ignore if Web Audio API is not available
+    }
+  }, []);
+
+  // Skip intro if flag is enabled
+  useEffect(() => {
+    if (SKIP_INTRO) {
+      setHasStarted(true);
+      setSceneStarted(true);
+      setBackgroundOpacity(0);
+      setEnvironmentProgress(1);
+      setCurrentLineIndex(TYPED_LINES.length);
+      setCurrentCharIndex(0);
+      // Start music
+      const audio = backgroundAudioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        void audio.play().catch(() => {
+          // ignore play errors (browser might block)
+        });
+      }
+    }
   }, []);
 
   const playBackgroundMusic = useCallback(() => {
@@ -400,9 +483,62 @@ export default function App() {
       return;
     }
     audio.currentTime = 0;
+    audio.volume = 1.0;
     void audio.play().catch(() => {
       // ignore play errors (browser might block)
     });
+  }, []);
+
+  const fadeOutMusic = useCallback(() => {
+    const audio = backgroundAudioRef.current;
+    if (!audio || audio.paused) {
+      return;
+    }
+
+    const fadeDuration = 1000; // 1 second fade
+    const fadeSteps = 20;
+    const fadeInterval = fadeDuration / fadeSteps;
+    const volumeStep = audio.volume / fadeSteps;
+
+    const fadeTimer = setInterval(() => {
+      if (audio.volume > 0.1) {
+        audio.volume = Math.max(0, audio.volume - volumeStep);
+      } else {
+        audio.volume = 0;
+        audio.pause();
+        clearInterval(fadeTimer);
+      }
+    }, fadeInterval);
+  }, []);
+
+  const fadeInMusic = useCallback(() => {
+    const audio = backgroundAudioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    // Start playing if paused
+    if (audio.paused) {
+      audio.volume = 0;
+      void audio.play().catch(() => {
+        // ignore play errors (browser might block)
+      });
+    }
+
+    const fadeDuration = 1000; // 1 second fade
+    const fadeSteps = 20;
+    const fadeInterval = fadeDuration / fadeSteps;
+    const targetVolume = 1.0;
+    const volumeStep = targetVolume / fadeSteps;
+
+    const fadeTimer = setInterval(() => {
+      if (audio.volume < targetVolume - 0.05) {
+        audio.volume = Math.min(targetVolume, audio.volume + volumeStep);
+      } else {
+        audio.volume = targetVolume;
+        clearInterval(fadeTimer);
+      }
+    }, fadeInterval);
   }, []);
 
   const typingComplete = currentLineIndex >= TYPED_LINES.length;
@@ -454,6 +590,7 @@ export default function App() {
     const currentLine = TYPED_LINES[currentLineIndex] ?? "";
     const handle = window.setTimeout(() => {
       if (currentCharIndex < currentLine.length) {
+        playTypingSound();
         setCurrentCharIndex((prev) => prev + 1);
         return;
       }
@@ -477,6 +614,7 @@ export default function App() {
     currentLineIndex,
     typingComplete,
     sceneStarted,
+    playTypingSound,
   ]);
 
   useEffect(() => {
@@ -511,6 +649,127 @@ export default function App() {
     setActiveCardId((current) => (current === id ? null : id));
   }, []);
 
+  const handleTakePhoto = useCallback(() => {
+    fadeOutMusic();
+    setShowCameraModal(true);
+    setTerminalLineIndex(0);
+    setTerminalCharIndex(0);
+    setTerminalTypingComplete(false);
+    setTerminalCursorVisible(true);
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+  }, [fadeOutMusic]);
+
+  const handleCloseModal = useCallback(() => {
+    if (terminalTypingComplete) {
+      fadeInMusic();
+      setShowCameraModal(false);
+      setTerminalLineIndex(0);
+      setTerminalCharIndex(0);
+      setTerminalTypingComplete(false);
+      // Restore body scroll
+      document.body.style.overflow = '';
+    }
+  }, [terminalTypingComplete, fadeInMusic]);
+
+  // Terminal typing animation
+  const terminalTypedLines = useMemo(() => {
+    if (TERMINAL_LINES.length === 0) {
+      return [""];
+    }
+
+    return TERMINAL_LINES.map((line, index) => {
+      if (terminalTypingComplete || index < terminalLineIndex) {
+        return line;
+      }
+      if (index === terminalLineIndex) {
+        return line.slice(0, Math.min(terminalCharIndex, line.length));
+      }
+      return "";
+    });
+  }, [terminalCharIndex, terminalLineIndex, terminalTypingComplete]);
+
+  const terminalCursorLineIndex = terminalTypingComplete
+    ? Math.max(terminalTypedLines.length - 1, 0)
+    : terminalLineIndex;
+  const terminalCursorTargetIndex = Math.max(
+    Math.min(terminalCursorLineIndex, terminalTypedLines.length - 1),
+    0
+  );
+
+  // Terminal typing effect
+  useEffect(() => {
+    if (!showCameraModal || terminalTypingComplete) {
+      return;
+    }
+
+    const currentLine = TERMINAL_LINES[terminalLineIndex] ?? "";
+    
+    // If we've finished typing the current line, wait before moving to next
+    if (terminalCharIndex >= currentLine.length) {
+      const lineDelay = TERMINAL_LINE_DELAYS[terminalLineIndex] ?? 800;
+      const handle = window.setTimeout(() => {
+        let nextLineIndex = terminalLineIndex + 1;
+        while (
+          nextLineIndex < TERMINAL_LINES.length &&
+          TERMINAL_LINES[nextLineIndex].length === 0
+        ) {
+          nextLineIndex += 1;
+        }
+
+        if (nextLineIndex >= TERMINAL_LINES.length) {
+          setTerminalTypingComplete(true);
+        } else {
+          setTerminalLineIndex(nextLineIndex);
+          setTerminalCharIndex(0);
+        }
+      }, lineDelay);
+
+      return () => window.clearTimeout(handle);
+    }
+
+    // Continue typing current line
+    const handle = window.setTimeout(() => {
+      playTypingSound();
+      setTerminalCharIndex((prev) => prev + 1);
+    }, TERMINAL_CHAR_DELAY);
+
+    return () => window.clearTimeout(handle);
+  }, [
+    showCameraModal,
+    terminalCharIndex,
+    terminalLineIndex,
+    terminalTypingComplete,
+    playTypingSound,
+  ]);
+
+  // Terminal cursor blink
+  useEffect(() => {
+    if (!showCameraModal) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      setTerminalCursorVisible((prev) => !prev);
+    }, TERMINAL_CURSOR_BLINK_INTERVAL);
+    return () => window.clearInterval(handle);
+  }, [showCameraModal]);
+
+  // ESC key handler for terminal
+  useEffect(() => {
+    if (!showCameraModal) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && terminalTypingComplete) {
+        handleCloseModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCameraModal, terminalTypingComplete, handleCloseModal]);
+
   const isScenePlaying = hasStarted && sceneStarted;
 
   return (
@@ -541,6 +800,52 @@ export default function App() {
       {hasAnimationCompleted && isCandleLit && (
         <div className="hint-overlay">press space to blow out the candle</div>
       )}
+      {hasAnimationCompleted && (
+        <button 
+          className="take-photo-button"
+          onClick={handleTakePhoto}
+          aria-label="Take Photo"
+        >
+          Take Photo
+        </button>
+      )}
+      {showCameraModal && (
+        <div className="terminal-overlay">
+          <div className="terminal-window">
+            <div className="terminal-content">
+              {terminalTypedLines.map((line, index) => {
+                const showCursor =
+                  terminalCursorVisible &&
+                  index === terminalCursorTargetIndex &&
+                  !terminalTypingComplete;
+                return (
+                  <div className="terminal-line" key={`terminal-line-${index}`}>
+                    <span className="terminal-text">
+                      {line || "\u00a0"}
+                      {showCursor && (
+                        <span aria-hidden="true" className="terminal-cursor">
+                          _
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {terminalTypingComplete && (
+              <div className="terminal-close-container">
+                <button 
+                  className="terminal-close-button"
+                  onClick={handleCloseModal}
+                >
+                  CLOSE
+                </button>
+                <div className="terminal-close-hint">Press ESC to close</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <Canvas
         gl={{ alpha: true }}
         style={{ background: "transparent" }}
@@ -559,17 +864,17 @@ export default function App() {
             activeCardId={activeCardId}
             onToggleCard={handleCardToggle}
           />
-          <ambientLight intensity={(1 - environmentProgress) * 0.8} />
+          <ambientLight intensity={0.8} />
           <directionalLight intensity={0.5} position={[2, 10, 0]} color={[1, 0.9, 0.95]}/>
           <Environment
-            files={["/shanghai_bund_4k.hdr"]}
+            files={["/champagne_castle_1_4k.exr"]}
             backgroundRotation={[0, 3.3, 0]}
             environmentRotation={[0, 3.3, 0]}
             background
             environmentIntensity={0.1 * environmentProgress}
-            backgroundIntensity={0.05 * environmentProgress}
+            backgroundIntensity={1.0 * environmentProgress}
           />
-          <EnvironmentBackgroundController intensity={0.05 * environmentProgress} />
+          <EnvironmentBackgroundController intensity={1.0 * environmentProgress} />
           <Fireworks isActive={fireworksActive} origin={[0, 10, 0]} />
           <ConfiguredOrbitControls />
         </Suspense>
