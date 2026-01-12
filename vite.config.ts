@@ -16,5 +16,5 @@ export default defineConfig({
   // For local development, this will be '/'
   base: process.env.REPO_NAME 
     ? `/${process.env.REPO_NAME}/`
-    : (process.env.NODE_ENV === 'production' ? '/birthday-cake-from-crush/' : '/'),
+    : (process.env.NODE_ENV === 'production' ? '/birthday-gallery-for-hommy/' : '/'),
 })
