@@ -141,7 +141,7 @@ export function BirthdayCard({
   }, []);
 
   const handleClick = useCallback(
-    (event: ThreeEvent<MouseEvent>) => {
+    (event: ThreeEvent<MouseEvent | PointerEvent>) => {
       event.stopPropagation();
       onToggle(id);
     },

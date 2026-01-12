@@ -356,6 +356,13 @@ function ConfiguredOrbitControls() {
       maxDistance={ORBIT_MAX_DISTANCE}
       minPolarAngle={ORBIT_MIN_POLAR}
       maxPolarAngle={ORBIT_MAX_POLAR}
+      enablePan={true}
+      enableZoom={true}
+      enableRotate={true}
+      touches={{
+        ONE: 2, // Rotate
+        TWO: 1, // Zoom
+      }}
     />
   );
 }
@@ -798,7 +805,7 @@ export default function App() {
         </div>
       </div>
       {hasAnimationCompleted && isCandleLit && (
-        <div className="hint-overlay">press space to blow out the candle</div>
+        <div className="hint-overlay">tap to blow out the candle</div>
       )}
       {hasAnimationCompleted && (
         <button 
@@ -847,10 +854,18 @@ export default function App() {
         </div>
       )}
       <Canvas
-        gl={{ alpha: true }}
-        style={{ background: "transparent" }}
+        gl={{ 
+          alpha: true,
+          antialias: true,
+          powerPreference: "high-performance",
+          stencil: false,
+          depth: true,
+        }}
+        style={{ background: "transparent", touchAction: "none" }}
         onCreated={({ gl }) => {
           gl.setClearColor("#000000", 0);
+          // Optimize for mobile devices - limit pixel ratio for better performance
+          gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         }}
       >
         <Suspense fallback={null}>
