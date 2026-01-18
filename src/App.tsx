@@ -360,8 +360,8 @@ function ConfiguredOrbitControls() {
       enableZoom={true}
       enableRotate={true}
       touches={{
-        ONE: 2, // Rotate
-        TWO: 1, // Zoom
+        ONE: 1, // ROTATE - one finger rotates the camera around the cake
+        TWO: 1, // DOLLY - two fingers zoom in/out (pinch to zoom)
       }}
     />
   );
