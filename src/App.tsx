@@ -412,6 +412,8 @@ export default function App() {
     audio.loop = true;
     audio.preload = "auto";
     audio.volume = 1.0;
+    // Set crossOrigin to handle CORS if needed
+    audio.crossOrigin = "anonymous";
     backgroundAudioRef.current = audio;
     return () => {
       audio.pause();
@@ -481,7 +483,7 @@ export default function App() {
     }
   }, []);
 
-  const playBackgroundMusic = useCallback(() => {
+  const playBackgroundMusic = useCallback(async () => {
     const audio = backgroundAudioRef.current;
     if (!audio) {
       return;
@@ -489,11 +491,27 @@ export default function App() {
     if (!audio.paused) {
       return;
     }
+    
+    // Reset and prepare audio for mobile
     audio.currentTime = 0;
     audio.volume = 1.0;
-    void audio.play().catch(() => {
-      // ignore play errors (browser might block)
-    });
+    
+    // For mobile browsers, we need to ensure audio is ready
+    // Reload if needed to ensure it's ready to play
+    try {
+      // Try playing directly first
+      await audio.play();
+    } catch (error) {
+      // If play fails (common on mobile), try loading first then playing
+      try {
+        audio.load();
+        await audio.play();
+      } catch (loadError) {
+        // If still fails, the browser is blocking autoplay
+        // This is expected on some mobile browsers - user needs to interact
+        console.log('Audio play failed - may require user interaction:', loadError);
+      }
+    }
   }, []);
 
   const fadeOutMusic = useCallback(() => {
